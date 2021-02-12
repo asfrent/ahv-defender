@@ -380,7 +380,7 @@ std::string ReadAllFromStdin() {
 }
 
 void PrintUsage() {
-  std::cerr << "Usage: ./email-analyzer standard|thorough|paranoid" << std::endl;
+  std::cerr << "Usage: ./email-analyzer standard|thorough|paranoid [db_server_address]" << std::endl;
 }
 
 // Builds a new AHVExtractor from the supplied string specification.
@@ -404,13 +404,21 @@ int main(int argc, char** argv) {
     exit(-1);
   }
 
+  // Initialize a database client if the target argument was supplied.
+  auto ahv_database_client =
+      argc == 3 ? AHVDatabaseClient::New(argv[2])
+                : std::unique_ptr<AHVDatabaseClient>(nullptr);
+
   // Build extractor from spec and use it to process all text from standard
   // input.
   auto extractor = NewExtractorFromSpec(argv[1]);
   extractor->Process(ReadAllFromStdin());
   for (int64_t ahv : extractor->Results()) {
-    std::cout << ahv << std::endl;
+    if (ahv_database_client.get() == nullptr || ahv_database_client->Lookup(ahv)) {
+      std::cout << ahv << std::endl;
+    }
   }
+
 
   return 0;
 }

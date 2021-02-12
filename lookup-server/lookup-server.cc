@@ -19,6 +19,7 @@ using ahvdefender::AHVLookupResponse;
 
 class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
   Status Lookup(ServerContext* context, const AHVLookupRequest* request, AHVLookupResponse* response) override {
+    std::cout << "Looking up AHV " << request->ahv() << std::endl;
     response->set_found(true);
     return Status::OK;
   }
