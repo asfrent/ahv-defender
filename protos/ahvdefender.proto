@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package ahvdefender;
+
+service AHVDatabase {
+  rpc Lookup (AHVLookupRequest) returns (AHVLookupResponse) {}
+  rpc Add (AHVAddRequest) returns (AHVAddResponse) {}
+  rpc Remove (AHVRemoveRequest) returns (AHVRemoveRequest) {}
+}
+
+message AHVLookupRequest {
+  int64 ahv = 1;
+}
+
+message AHVLookupResponse {
+  bool found = 1;
+}
+
+message AHVAddRequest {
+  int64 ahv = 1;
+}
+
+message AHVAddResponse {
+  bool added = 1;
+}
+
+message AHVRemoveRequest {
+  int64 ahv = 1;
+}
+
+message AHVRemoveResponse {
+  bool removed = 1;
+}
