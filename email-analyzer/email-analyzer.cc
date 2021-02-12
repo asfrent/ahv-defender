@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cctype>
 #include <sstream>
+#include <regex>
 
 #include <grpcpp/grpcpp.h>
 
@@ -106,8 +107,6 @@ class AHVUtil {
       }
     }
 
-    std::cout << "Only digits: " << only_digits << std::endl;
-
     // We use IsValid as this process is fast enough, even though some
     // functionality overlaps. This is intended: makes for more reusable code
     // in exchange for a few more microseconds at runtime.
@@ -129,7 +128,28 @@ class AHVUtil {
 
 class AHVExtractor {
  public:
-  virtual std::vector<int64_t> ExtractFromText(const std::string& text) = 0;
+  // To be implemented in the derived classes.
+  virtual void Process(const std::string& text) = 0;
+
+  // Gives access to the results set.
+  const std::unordered_set<int64_t>& Results() {
+    return results_;
+  }
+
+ protected:
+  // This method should be called each time a potential AHV is found at a higher
+  // level. It converts the string to int64_t and checks its validity and, if
+  // these checks pass, adds the converted AHV to the results.
+  void Matched(const std::string& match) {
+    int64_t ahv = -1;
+    if (!AHVUtil::FromString(match, &ahv)) {
+      return;
+    }
+    results_.insert(ahv);
+  }
+
+  // We use a set to avoid storing duplicates.
+  std::unordered_set<int64_t> results_;
 };
 
 // In STANDARD mode we only check a restricted set of regular expressions
@@ -140,9 +160,41 @@ class AHVExtractor {
 //   * There's no more than 4 separators in total.
 class AHVExtractorStandard : public AHVExtractor {
  public:
-  std::vector<int64_t> ExtractFromText(const std::string& text) {
-    return {};
+  AHVExtractorStandard() {
+    regex_list_.push_back(std::regex(
+        "756[ \\.-]?([0-9][ \\.-]?){10}",
+        std::regex::optimize));
   }
+
+  void Process(const std::string& text) override {
+    // Iterate over regex list.
+    for (const std::regex re : regex_list_) {
+      auto start = std::sregex_iterator(text.begin(), text.end(), re);
+      auto stop = std::sregex_iterator();
+      // Iterate over matches.
+      for (std::sregex_iterator i = start; i != stop; ++i) {
+        // We filter out matches that have more than 4 separators.
+        if (CountSeparators(i->str()) > 4) {
+          continue;
+        }
+        // Report the match to the base class.
+        Matched(i->str());
+      }
+    }
+  }
+
+ private:
+  static int CountSeparators(const std::string& ahv) {
+    int count = 0;
+    for (char c : ahv) {
+      if (!isdigit(c)) {
+        ++count;
+      }
+    }
+    return count;
+  }
+
+  std::vector<std::regex> regex_list_;
 };
 
 // In THOROUGH mode we check additional AHV templates via regular
@@ -151,20 +203,20 @@ class AHVExtractorStandard : public AHVExtractor {
 //   * We allow separators to appear more than once between two digits,
 //     maybe with some additional restrictions.
 //   * We allow up to 6 separators.
-class AHVExtractorThorough {
+class AHVExtractorThorough : public AHVExtractor {
  public:
-  std::vector<int64_t> ExtractFromText(const std::string& text) {
-    return {};
+  void Process(const std::string& text) override {
+    // TODO implement.
   }
 };
 
 // In PARANOID mode use a double ended queue to scan for any string that
 // contains 13 digits with only loose restrictions: they may be separated
 // by any characters and need to be "close enough" between them.
-class AHVExtractorParanoid {
+class AHVExtractorParanoid : public AHVExtractor {
  public:
-  std::vector<int64_t> ExtractFromText(const std::string& text) {
-    return {};
+  void Process(const std::string& text) override {
+    // TODO implement.
   }
 };
 
@@ -193,8 +245,8 @@ std::string ReadAllFromStdin() {
 int main(int argc, char** argv) {
   std::string text = ReadAllFromStdin();
   std::unique_ptr<AHVExtractor> extractor(new AHVExtractorStandard);
-  auto result = extractor->ExtractFromText(text);
-  for (int64_t ahv : result) {
+  extractor->Process(text);
+  for (int64_t ahv : extractor->Results()) {
     std::cout << ahv << std::endl;
   }
   return 0;
