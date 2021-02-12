@@ -6,6 +6,9 @@ project(AHVDefender
         LANGUAGES CXX
 )
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 list(APPEND CMAKE_PREFIX_PATH "/opt/grpc" "/opt/protoc")
 
 find_package(Protobuf REQUIRED)
