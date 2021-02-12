@@ -129,20 +129,43 @@ class AHVUtil {
 
 class AHVExtractor {
  public:
-  enum Mode {
-    STANDARD,
-    THOROUGH,
-    PARANOID
-  };
+  virtual std::vector<int64_t> ExtractFromText(const std::string& text) = 0;
+};
 
-  AHVExtractor(Mode mode) : mode_(mode) {}
-
-  std::vector<int64_t> ExtractAHV(const std::string& text) {
+// In STANDARD mode we only check a restricted set of regular expressions
+// that match some of the more frequently used forms:
+//   * Separators can only be one of ' ', '.', '-'.
+//   * The three digits in the beginning ('756') are never separated.
+//   * There is no more than one separator between two digits.
+//   * There's no more than 4 separators in total.
+class AHVExtractorStandard : public AHVExtractor {
+ public:
+  std::vector<int64_t> ExtractFromText(const std::string& text) {
     return {};
   }
+};
 
- private:
-  Mode mode_;
+// In THOROUGH mode we check additional AHV templates via regular
+// expressions, but we still look only for the saner of the possible forms:
+//   * More separators (eg. '_', '/', ',')
+//   * We allow separators to appear more than once between two digits,
+//     maybe with some additional restrictions.
+//   * We allow up to 6 separators.
+class AHVExtractorThorough {
+ public:
+  std::vector<int64_t> ExtractFromText(const std::string& text) {
+    return {};
+  }
+};
+
+// In PARANOID mode use a double ended queue to scan for any string that
+// contains 13 digits with only loose restrictions: they may be separated
+// by any characters and need to be "close enough" between them.
+class AHVExtractorParanoid {
+ public:
+  std::vector<int64_t> ExtractFromText(const std::string& text) {
+    return {};
+  }
 };
 
 void TestService() {
@@ -168,15 +191,11 @@ std::string ReadAllFromStdin() {
 }
 
 int main(int argc, char** argv) {
-  AHVExtractor ahv_extractor(AHVExtractor::Mode::STANDARD);
   std::string text = ReadAllFromStdin();
-  int64_t ahv = 0;
-  if (AHVUtil::FromString(text, &ahv)) {
-    std::cout << "valid" << std::endl;
+  std::unique_ptr<AHVExtractor> extractor(new AHVExtractorStandard);
+  auto result = extractor->ExtractFromText(text);
+  for (int64_t ahv : result) {
     std::cout << ahv << std::endl;
-  } else {
-    std::cerr << "invalid" << std::endl;
   }
-
   return 0;
 }
