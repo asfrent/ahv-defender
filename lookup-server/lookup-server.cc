@@ -2,7 +2,13 @@
 #include <memory>
 #include <string>
 #include <cstdlib>
+#include <cstdio>
 #include <mutex>
+#include <fstream>
+#include <sys/stat.h>
+#include <signal.h>
+#include <unistd.h>
+#include <thread>
 
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -22,6 +28,21 @@ using ahvdefender::AHVAddRequest;
 using ahvdefender::AHVAddResponse;
 using ahvdefender::AHVRemoveRequest;
 using ahvdefender::AHVRemoveResponse;
+
+std::mutex shutdown_mutex;
+
+void SigIntHandler(int s){
+  std::cout << "Caught SIGINT." << std::endl;
+  shutdown_mutex.unlock();
+}
+
+void SetUpSigIntHandler() {
+  struct sigaction sig_int_handler;
+  sig_int_handler.sa_handler = SigIntHandler;
+  sigemptyset(&sig_int_handler.sa_mask);
+  sig_int_handler.sa_flags = 0;
+  sigaction(SIGINT, &sig_int_handler, nullptr);
+}
 
 #define BCRYPT_INPUT_LEN 16
 #define BCRYPT_HASH_LEN 64
@@ -67,9 +88,35 @@ class BinaryHash {
   unsigned char data_[24];
 };
 
+class DiskRecord {
+ public:
+  void set_used(bool used) {
+    data_[0] = (unsigned char) (used ? 0x01 : 0x00);
+  }
+
+  void set_data(const char* data[23]) {
+    memcpy(data_, data, 23);
+  }
+
+ private:
+  // Record layout:
+  //   * byte 0: 0x01 if index is used, 0x00 if index is free.
+  //   * bytes 1-23: bcrypt binary hash.
+  unsigned char data_[24];
+};
+
 class AHVDiskDatabase {
  public:
-  AHVDiskDatabase() {
+  AHVDiskDatabase(const std::string& filename) {
+    if (!FileExists(filename)) {
+      CreateEmptyFile(filename);
+    }
+    fs_.open(filename, std::ios::binary | std::ios::in | std::ios::out);
+  }
+
+  ~AHVDiskDatabase() {
+    fs_.close();
+    std::cout << "Database object cleanly destructed." << std::endl;
   }
 
   void Add(const std::string& ahv) {
@@ -88,8 +135,19 @@ class AHVDiskDatabase {
     return true;
   }
 
+  static bool FileExists(const std::string& filename) {
+    struct stat buffer;
+    return stat(filename.c_str(), &buffer) == 0;
+  }
+
+  static void CreateEmptyFile(const std::string& filename) {
+    std::ofstream output(filename);
+    output.close();
+  }
+
  private:
   BCryptHasher hasher_;
+  std::fstream fs_;
 };
 
 class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
@@ -128,7 +186,7 @@ class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
 };
 
 void RunServer() {
-  std::unique_ptr<AHVDiskDatabase> ahv_disk_database = std::make_unique<AHVDiskDatabase>();
+  std::unique_ptr<AHVDiskDatabase> ahv_disk_database = std::make_unique<AHVDiskDatabase>("hashes");
   std::string server_address("0.0.0.0:12000");
   AHVDatabaseServiceImpl service(std::move(ahv_disk_database));
   grpc::EnableDefaultHealthCheckService(true);
@@ -138,13 +196,16 @@ void RunServer() {
   builder.RegisterService(&service);
   std::unique_ptr<Server> server(builder.BuildAndStart());
   std::cout << "Server listening on " << server_address << std::endl;
-  server->Wait();
+  std::thread t([&] () -> void { server->Wait(); });
+  shutdown_mutex.lock();
+  shutdown_mutex.lock();
+  server->Shutdown();
+  t.join();
 }
 
 int main(int argc, char** argv) {
-  auto hasher = std::make_unique<BCryptHasher>();
-  std::string plaintext;
-  std::getline(std::cin, plaintext);
-  std::cout << hasher->ComputeHash(plaintext) << std::endl;
+  SetUpSigIntHandler();
+  RunServer();
+  std::cout << "Bye." << std::endl;
   return 0;
 }
