@@ -2,6 +2,7 @@
 #include <memory>
 #include <string>
 #include <cstdlib>
+#include <mutex>
 
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -17,10 +18,14 @@ using grpc::Status;
 using ahvdefender::AHVDatabase;
 using ahvdefender::AHVLookupRequest;
 using ahvdefender::AHVLookupResponse;
+using ahvdefender::AHVAddRequest;
+using ahvdefender::AHVAddResponse;
+using ahvdefender::AHVRemoveRequest;
+using ahvdefender::AHVRemoveResponse;
 
 #define BCRYPT_INPUT_LEN 16
 #define BCRYPT_HASH_LEN 64
-#define BCRYPT_FACTOR 13
+#define BCRYPT_FACTOR 8
 
 extern "C" {
 char *crypt_gensalt_rn(__const char *prefix, unsigned long count, __const char *input, int size, char *output, int output_size);
@@ -53,10 +58,29 @@ const unsigned char BCryptHasher::input[16] = {
 
 class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
   Status Lookup(ServerContext* context, const AHVLookupRequest* request, AHVLookupResponse* response) override {
-    std::cout << "Looking up AHV " << request->ahv() << std::endl;
+    cout_mutex.lock();
+    std::cout << "Lookup " << request->ahv() << std::endl;
+    cout_mutex.unlock();
     response->set_found(true);
     return Status::OK;
   }
+
+  Status Add(ServerContext* context, const AHVAddRequest* request, AHVAddResponse* response) override {
+    cout_mutex.lock();
+    std::cout << "Add " << request->ahv() << std::endl;
+    cout_mutex.unlock();
+    return Status::OK;
+  }
+
+  Status Remove(ServerContext* context, const AHVRemoveRequest* request, AHVRemoveResponse* response) {
+    cout_mutex.lock();
+    std::cout << "Remove " << request->ahv() << std::endl;
+    cout_mutex.unlock();
+    return Status::OK;
+  }
+
+ private:
+  std::mutex cout_mutex;
 };
 
 void RunServer() {

@@ -5,7 +5,7 @@ package ahvdefender;
 service AHVDatabase {
   rpc Lookup (AHVLookupRequest) returns (AHVLookupResponse) {}
   rpc Add (AHVAddRequest) returns (AHVAddResponse) {}
-  rpc Remove (AHVRemoveRequest) returns (AHVRemoveRequest) {}
+  rpc Remove (AHVRemoveRequest) returns (AHVRemoveResponse) {}
 }
 
 message AHVLookupRequest {
@@ -21,7 +21,6 @@ message AHVAddRequest {
 }
 
 message AHVAddResponse {
-  bool added = 1;
 }
 
 message AHVRemoveRequest {
@@ -29,5 +28,4 @@ message AHVRemoveRequest {
 }
 
 message AHVRemoveResponse {
-  bool removed = 1;
 }
