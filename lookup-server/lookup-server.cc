@@ -171,7 +171,7 @@ class AHVStore_File {
     // Prepare disk record.
     DiskRecord disk_record;
     disk_record.set_used(true);
-    memcpy(disk_record.data, hash.c_str(), 31);
+    memcpy(disk_record.data + 1, hash.c_str(), 31);
 
     // Append.
     fs_.seekp(0, std::ios::end);
