@@ -56,12 +56,36 @@ const unsigned char BCryptHasher::input[16] = {
   0xa3, 0x1a, 0x8a, 0x03, 0x06, 0x26, 0xd0, 0xcb,
 };
 
+class AHVDiskDatabase {
+ public:
+  AHVDiskDatabase() {
+  }
+
+  void Add(const std::string& ahv) {
+    // TODO
+  }
+
+  void Remove(const std::string& ahv) {
+    // TODO
+  }
+
+  bool Lookup(const std::string& ahv) {
+    // TODO
+    return true;
+  }
+};
+
 class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
+ public:
+  AHVDatabaseServiceImpl(std::unique_ptr<AHVDiskDatabase> ahv_disk_database)
+      : ahv_disk_database_(std::move(ahv_disk_database)) {
+  }
+
   Status Lookup(ServerContext* context, const AHVLookupRequest* request, AHVLookupResponse* response) override {
     cout_mutex.lock();
     std::cout << "Lookup " << request->ahv() << std::endl;
     cout_mutex.unlock();
-    response->set_found(true);
+    response->set_found(ahv_disk_database_->Lookup(request->ahv()));
     return Status::OK;
   }
 
@@ -69,6 +93,7 @@ class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
     cout_mutex.lock();
     std::cout << "Add " << request->ahv() << std::endl;
     cout_mutex.unlock();
+    ahv_disk_database_->Add(request->ahv());
     return Status::OK;
   }
 
@@ -76,16 +101,19 @@ class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
     cout_mutex.lock();
     std::cout << "Remove " << request->ahv() << std::endl;
     cout_mutex.unlock();
+    ahv_disk_database_->Remove(request->ahv());
     return Status::OK;
   }
 
  private:
   std::mutex cout_mutex;
+  std::unique_ptr<AHVDiskDatabase> ahv_disk_database_;
 };
 
 void RunServer() {
+  std::unique_ptr<AHVDiskDatabase> ahv_disk_database = std::make_unique<AHVDiskDatabase>();
   std::string server_address("0.0.0.0:12000");
-  AHVDatabaseServiceImpl service;
+  AHVDatabaseServiceImpl service(std::move(ahv_disk_database));
   grpc::EnableDefaultHealthCheckService(true);
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
   ServerBuilder builder;
