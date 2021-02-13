@@ -81,6 +81,10 @@ target_link_libraries(lookup-server
     "bcrypt"
 )
 
+add_executable(ahv-gen
+  tools/ahv-gen.cc
+)
+
 add_executable(cli
     lookup-server/cli.cc
     protos/gen/ahvdefender.grpc.pb.h
