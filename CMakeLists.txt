@@ -73,6 +73,7 @@ target_link_libraries(email-analyzer
 
 add_executable(lookup-server
   lookup-server/lookup-server.cc
+  lib/BCryptHasher.hpp
   ${GRPC_AND_PROTO_SRCFILES}
 )
 
