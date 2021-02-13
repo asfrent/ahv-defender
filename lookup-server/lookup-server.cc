@@ -111,21 +111,17 @@ class AHVCache_HashMap {
  public:
   void Remove(const std::string& hash) {
     m_.erase(hash);
-    std::cout << "[cache] removed " << hash << std::endl;
   }
 
   void Add(const std::string& hash, int64_t record_index) {
     m_[hash] = record_index;
-    std::cout << "[cache] added " << hash << " -> " << record_index << std::endl;
   }
 
   int64_t Find(const std::string& hash) {
     auto it = m_.find(hash);
     if (it == m_.end()) {
-      std::cout << "[cache] find " << hash << " -> -1" << std::endl;
       return -1;
     }
-    std::cout << "[cache] find " << hash << " -> " << it->second << std::endl;
     return it->second;
   }
 
@@ -171,7 +167,13 @@ class AHVStore_File {
     }
   }
 
-  int64_t Add(const DiskRecord& disk_record) {
+  int64_t Add(const std::string& hash) {
+    // Prepare disk record.
+    DiskRecord disk_record;
+    disk_record.set_used(true);
+    memcpy(disk_record.data, hash.c_str(), 31);
+
+    // Append.
     fs_.seekp(0, std::ios::end);
     int64_t record_index = fs_.tellp();
     fs_.write((const char*) disk_record.data, 32);
@@ -216,16 +218,8 @@ class AHVDiskDatabase {
   bool Add(const std::string& ahv) {
     std::string hash = hasher_.ComputeHash(ahv);
     if (cache_.Find(hash) >= 0) return false;
-
-    // Prepare record.
-    DiskRecord disk_record;
-    disk_record.set_used(true);
-    memcpy(disk_record.data, hash.c_str(), 31);
-
-    // Add to store and cache.
-    int64_t record_index = store_.Add(disk_record);
+    int64_t record_index = store_.Add(hash);
     cache_.Add(hash, record_index);
-
     return true;
   }
 
@@ -233,11 +227,8 @@ class AHVDiskDatabase {
     std::string hash = hasher_.ComputeHash(ahv);
     int64_t record_index = cache_.Find(hash);
     if (record_index == -1) return false;
-
-    // Remove from store and cache.
     store_.Remove(record_index);
     cache_.Remove(hash);
-
     return true;
   }
 
