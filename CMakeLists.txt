@@ -62,6 +62,7 @@ add_library(bcrypt
 add_executable(email-analyzer
   email-analyzer/email-analyzer.cc
   lib/AHVUtil.hpp
+  lib/AHVDatabaseClient.hpp
   ${GRPC_AND_PROTO_SRCFILES}
 )
 
@@ -81,10 +82,6 @@ target_link_libraries(lookup-server
   bcrypt
 )
 
-add_executable(ahv-gen
-  tools/ahv-gen.cc
-)
-
 add_executable(cli
   lookup-server/cli.cc
   lib/AHVDatabaseClient.hpp
@@ -94,4 +91,8 @@ add_executable(cli
 target_link_libraries(cli
   gRPC::grpc++_reflection
   protobuf::libprotobuf
+)
+
+add_executable(ahv-gen
+  tools/ahv-gen.cc
 )

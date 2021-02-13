@@ -8,52 +8,8 @@
 #include <deque>
 #include <functional>
 
-#include <grpcpp/grpcpp.h>
-
-#include "ahvdefender.grpc.pb.h"
 #include "AHVUtil.hpp"
-
-using grpc::Channel;
-using grpc::ClientContext;
-using grpc::Status;
-
-using ahvdefender::AHVDatabase;
-using ahvdefender::AHVLookupRequest;
-using ahvdefender::AHVLookupResponse;
-
-class AHVDatabaseClient {
- public:
-  bool Lookup(const std::string& ahv) {
-    AHVLookupRequest request;
-    request.set_ahv(ahv);
-
-    AHVLookupResponse response;
-
-    ClientContext context;
-    Status status = stub_->Lookup(&context, request, &response);
-
-    if (status.ok()) {
-      return response.found();
-    } else {
-      std::cerr << status.error_code() << ": " << status.error_message() << std::endl;
-      // TODO we should probably create a strict mode which would allow us to
-      // control the returned value in case of failure.
-      return false;
-    }
-  }
-
-  static std::unique_ptr<AHVDatabaseClient> New(const std::string& target) {
-    auto insecure_credentials = grpc::InsecureChannelCredentials();
-    auto grpc_channel = grpc::CreateChannel(target, insecure_credentials);
-    return std::unique_ptr<AHVDatabaseClient>(new AHVDatabaseClient(grpc_channel));
-  }
-
- private:
-  AHVDatabaseClient(std::shared_ptr<Channel> channel)
-      : stub_(AHVDatabase::NewStub(channel)) {}
-
-  std::unique_ptr<AHVDatabase::Stub> stub_;
-};
+#include "AHVDatabaseClient.hpp"
 
 class AHVExtractor {
  public:
