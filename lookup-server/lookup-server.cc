@@ -178,14 +178,17 @@ class AHVDiskDatabase {
       : store_(filename) { }
 
   void Init() {
+    int64_t total_hashes = 0, total_free = 0;
     store_.ForEach(
         [&] (const char* data, int64_t index) -> void {
-          std::cout << "[" << index << "] Loaded hash." << std::endl;
           cache_.Add(std::string(data + 1, 31), index);
+          ++total_hashes;
         },
         [&] (int64_t index) -> void {
-          std::cout << "[" << index << "] Free space." << std::endl;
+          ++total_free;
         });
+    std::cout << "Loaded " << total_hashes << " hashes." << std::endl;
+    std::cout << "There's " << total_free << " free records in the DB." << std::endl;
   }
 
   bool Add(const std::string& ahv) {
