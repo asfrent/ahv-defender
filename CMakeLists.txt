@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 project(AHVDefender
         VERSION 1.0
         DESCRIPTION "AHV Defender blocks messages containing AHV strings."
-        LANGUAGES CXX
+        LANGUAGES C CXX
 )
 
 set(CMAKE_CXX_STANDARD 17)
@@ -23,6 +23,20 @@ message(STATUS ${GRPC_CPP_PLUGIN})
 file(MAKE_DIRECTORY "protos/gen")
 
 include_directories("protos/gen")
+
+set(BCRYPT_SRCFILES
+	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/crypt_blowfish.c
+	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/crypt_gensalt.c
+	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/wrapper.c
+	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/x86.S
+)
+
+add_library(
+	"bcrypt"
+	${BCRYPT_SRCFILES}
+)
+
+include_directories("crypt_blowfish-1.3")
 
 add_custom_command(
     OUTPUT ../protos/gen/ahvdefender.grpc.pb.h ../protos/gen/ahvdefender.grpc.pb.cc
@@ -64,4 +78,5 @@ add_executable(lookup-server
 target_link_libraries(lookup-server
     gRPC::grpc++_reflection
     protobuf::libprotobuf
+    "bcrypt"
 )
