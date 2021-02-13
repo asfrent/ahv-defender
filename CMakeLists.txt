@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(AHVDefender
-        VERSION 1.0
-        DESCRIPTION "AHV Defender blocks messages containing AHV strings."
-        LANGUAGES C CXX
+  VERSION 1.0
+  DESCRIPTION "AHV Defender blocks messages containing AHV strings."
+  LANGUAGES C CXX
 )
 
 set(CMAKE_CXX_STANDARD 17)
@@ -21,19 +21,19 @@ message(STATUS ${GRPC_CPP_PLUGIN})
 file(MAKE_DIRECTORY "protos/gen")
 
 add_custom_command(
-    OUTPUT ../protos/gen/ahvdefender.grpc.pb.h ../protos/gen/ahvdefender.grpc.pb.cc
-    COMMAND "protoc"
-    ARGS "--plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}" "--grpc_out=gen" "ahvdefender.proto"
-    DEPENDS "protos/ahvdefender.proto"
-    WORKING_DIRECTORY "../protos"
+  OUTPUT ../protos/gen/ahvdefender.grpc.pb.h ../protos/gen/ahvdefender.grpc.pb.cc
+  COMMAND "protoc"
+  ARGS "--plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}" "--grpc_out=gen" "ahvdefender.proto"
+  DEPENDS "protos/ahvdefender.proto"
+  WORKING_DIRECTORY "../protos"
 )
 
 add_custom_command(
-    OUTPUT ../protos/gen/ahvdefender.pb.h ../protos/gen/ahvdefender.pb.cc
-    COMMAND "protoc"
-    ARGS "--cpp_out=gen" "ahvdefender.proto"
-    DEPENDS "protos/ahvdefender.proto"
-    WORKING_DIRECTORY "../protos"
+  OUTPUT ../protos/gen/ahvdefender.pb.h ../protos/gen/ahvdefender.pb.cc
+  COMMAND "protoc"
+  ARGS "--cpp_out=gen" "ahvdefender.proto"
+  DEPENDS "protos/ahvdefender.proto"
+  WORKING_DIRECTORY "../protos"
 )
 
 include_directories("crypt_blowfish-1.3")
@@ -48,37 +48,37 @@ set(BCRYPT_SRCFILES
 	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/x86.S
 )
 
-add_library(
-	"bcrypt"
-	${BCRYPT_SRCFILES}
+set(GRPC_AND_PROTO_SRCFILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/protos/gen/ahvdefender.grpc.pb.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/protos/gen/ahvdefender.pb.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/protos/gen/ahvdefender.grpc.pb.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/protos/gen/ahvdefender.pb.cc
+)
+
+add_library(bcrypt
+  ${BCRYPT_SRCFILES}
 )
 
 add_executable(email-analyzer
-    email-analyzer/email-analyzer.cc
-    protos/gen/ahvdefender.grpc.pb.h
-    protos/gen/ahvdefender.grpc.pb.cc
-    protos/gen/ahvdefender.pb.h
-    protos/gen/ahvdefender.pb.cc
-    lib/AHVUtil.hpp
+  email-analyzer/email-analyzer.cc
+  lib/AHVUtil.hpp
+  ${GRPC_AND_PROTO_SRCFILES}
 )
 
 target_link_libraries(email-analyzer
-    gRPC::grpc++_reflection
-    protobuf::libprotobuf
+  gRPC::grpc++_reflection
+  protobuf::libprotobuf
 )
 
 add_executable(lookup-server
-    lookup-server/lookup-server.cc
-    protos/gen/ahvdefender.grpc.pb.h
-    protos/gen/ahvdefender.grpc.pb.cc
-    protos/gen/ahvdefender.pb.h
-    protos/gen/ahvdefender.pb.cc
+  lookup-server/lookup-server.cc
+  ${GRPC_AND_PROTO_SRCFILES}
 )
 
 target_link_libraries(lookup-server
-    gRPC::grpc++_reflection
-    protobuf::libprotobuf
-    "bcrypt"
+  gRPC::grpc++_reflection
+  protobuf::libprotobuf
+  bcrypt
 )
 
 add_executable(ahv-gen
@@ -86,14 +86,12 @@ add_executable(ahv-gen
 )
 
 add_executable(cli
-    lookup-server/cli.cc
-    protos/gen/ahvdefender.grpc.pb.h
-    protos/gen/ahvdefender.grpc.pb.cc
-    protos/gen/ahvdefender.pb.h
-    protos/gen/ahvdefender.pb.cc
+  lookup-server/cli.cc
+  lib/AHVDatabaseClient.hpp
+  ${GRPC_AND_PROTO_SRCFILES}
 )
 
 target_link_libraries(cli
-    gRPC::grpc++_reflection
-    protobuf::libprotobuf
+  gRPC::grpc++_reflection
+  protobuf::libprotobuf
 )
