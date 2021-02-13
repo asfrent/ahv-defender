@@ -107,3 +107,8 @@ target_link_libraries(db-gen
   "bcrypt"
   pthread
 )
+
+add_executable(db-gen-fake
+  tools/db-gen-fake.cc
+)
+
