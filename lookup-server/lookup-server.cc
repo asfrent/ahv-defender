@@ -145,6 +145,7 @@ class AHVStore_File {
 
   void ForEach(std::function<void(const char*, int64_t)> tell_record,
                std::function<void(int64_t)> tell_free) {
+    fs_mutex_.lock();
     fs_.seekg(0, std::ios::end);
     int64_t remaining = fs_.tellg();
     fs_.seekg(0, std::ios::beg);
@@ -165,6 +166,7 @@ class AHVStore_File {
       }
       remaining -= count;
     }
+    fs_mutex_.unlock();
   }
 
   int64_t Add(const std::string& hash) {
@@ -174,15 +176,19 @@ class AHVStore_File {
     memcpy(disk_record.data + 1, hash.c_str(), 31);
 
     // Append.
+    fs_mutex_.lock();
     fs_.seekp(0, std::ios::end);
     int64_t record_index = fs_.tellp();
     fs_.write((const char*) disk_record.data, 32);
+    fs_mutex_.unlock();
     return record_index;
   }
 
   void Remove(int64_t record_index) {
+    fs_mutex_.lock();
     fs_.seekp(record_index);
     fs_.write((const char*) DiskRecord::empty_record().data, 32);
+    fs_mutex_.unlock();
   }
 
  private:
@@ -197,6 +203,7 @@ class AHVStore_File {
   }
 
   std::fstream fs_;
+  std::mutex fs_mutex_;
 };
 
 class AHVDiskDatabase {
