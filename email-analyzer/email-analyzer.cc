@@ -22,7 +22,7 @@ using ahvdefender::AHVLookupResponse;
 
 class AHVDatabaseClient {
  public:
-  bool Lookup(int64_t ahv) {
+  bool Lookup(const std::string& ahv) {
     AHVLookupRequest request;
     request.set_ahv(ahv);
 
@@ -87,13 +87,13 @@ class AHVUtil {
   }
 
   // This function takes a string and converts it into the system canonical
-  // representation (int64_t). The function returns true if the digits found in
+  // representation (string). The function returns true if the digits found in
   // the supplied string form a valid AHV, false otherwise.
-  static bool FromString(const std::string& ahvs, int64_t *ahvi) {
+  static bool ExtractDigits(const std::string& ahv_in, std::string *ahv_out) {
     // Start by filtering all digits from the supplied string.
-    std::string only_digits;
+    *ahv_out = "";
     int digit_count = 0;
-    for (char c : ahvs) {
+    for (char c : ahv_in) {
       if (isdigit(c)) {
         ++digit_count;
         // Max length of an AHV is 13 digits, we discovered more than 13 in the
@@ -103,28 +103,19 @@ class AHVUtil {
           std::cerr << "AHVUtil::FromString encountered more than 13 digits in"
                     << " the supplied string, this is probably not intended."
                     << std::endl;
+          *ahv_out = "";
           return false;
         }
-        only_digits += c;
+        *ahv_out += c;
       }
     }
 
-    // We use IsValid as this process is fast enough, even though some
-    // functionality overlaps. This is intended: makes for more reusable code
-    // in exchange for a few more microseconds at runtime.
-    if (!IsValid(only_digits)) {
-      return false;
+    // Validate the extracted digits.
+    bool is_valid =  IsValid(*ahv_out);
+    if (!is_valid) {
+      *ahv_out = "";
     }
-
-    // Finally, convert the extracted digits to int64_t.
-    *ahvi = 0;
-    for (char c : only_digits) {
-      int current_digit = (int) (c - '0');
-      *ahvi *= 10;
-      *ahvi += current_digit;
-    }
-
-    return true;
+    return is_valid;
   }
 };
 
@@ -134,7 +125,7 @@ class AHVExtractor {
   virtual void Process(const std::string& text) = 0;
 
   // Gives access to the results set.
-  const std::unordered_set<int64_t>& Results() {
+  const std::unordered_set<std::string>& Results() {
     return results_;
   }
 
@@ -163,18 +154,18 @@ class AHVExtractor {
   }
 
   // This method should be called each time a potential AHV is found at a higher
-  // level. It converts the string to int64_t and checks its validity and, if
-  // these checks pass, adds the converted AHV to the results.
+  // level. It extracts the digits out of a match, checks its validity and adds
+  // the extracted AHV to the results (if valid).
   void Matched(const std::string& match) {
-    int64_t ahv = -1;
-    if (!AHVUtil::FromString(match, &ahv)) {
+    std::string ahv;
+    if (!AHVUtil::ExtractDigits(match, &ahv)) {
       return;
     }
     results_.insert(ahv);
   }
 
   // We use a set to avoid storing duplicates.
-  std::unordered_set<int64_t> results_;
+  std::unordered_set<std::string> results_;
 };
 
 // In STANDARD mode we only check a restricted set of regular expressions
@@ -362,7 +353,7 @@ void TestService() {
   auto start_time = std::chrono::high_resolution_clock::now();
   const int iterations = 10000;
   for (int i = 0; i < iterations; ++i) {
-    client->Lookup(123);
+    client->Lookup("123");
   }
   auto end_time = std::chrono::high_resolution_clock::now();
 
@@ -413,12 +404,11 @@ int main(int argc, char** argv) {
   // input.
   auto extractor = NewExtractorFromSpec(argv[1]);
   extractor->Process(ReadAllFromStdin());
-  for (int64_t ahv : extractor->Results()) {
+  for (const std::string& ahv : extractor->Results()) {
     if (ahv_database_client.get() == nullptr || ahv_database_client->Lookup(ahv)) {
       std::cout << ahv << std::endl;
     }
   }
-
 
   return 0;
 }
