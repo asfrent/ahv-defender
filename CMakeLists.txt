@@ -80,3 +80,16 @@ target_link_libraries(lookup-server
     protobuf::libprotobuf
     "bcrypt"
 )
+
+add_executable(cli
+    lookup-server/cli.cc
+    protos/gen/ahvdefender.grpc.pb.h
+    protos/gen/ahvdefender.grpc.pb.cc
+    protos/gen/ahvdefender.pb.h
+    protos/gen/ahvdefender.pb.cc
+)
+
+target_link_libraries(cli
+    gRPC::grpc++_reflection
+    protobuf::libprotobuf
+)
