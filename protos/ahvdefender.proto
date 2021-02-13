@@ -21,6 +21,7 @@ message AHVAddRequest {
 }
 
 message AHVAddResponse {
+  bool added = 1;
 }
 
 message AHVRemoveRequest {
@@ -28,4 +29,5 @@ message AHVRemoveRequest {
 }
 
 message AHVRemoveResponse {
+  bool removed = 1;
 }

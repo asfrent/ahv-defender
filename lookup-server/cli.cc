@@ -39,7 +39,7 @@ class AHVDatabaseClient {
     return response.found();
   }
 
-  void Add(const std::string& ahv) {
+  bool Add(const std::string& ahv) {
     AHVAddRequest request;
     request.set_ahv(ahv);
     AHVAddResponse response;
@@ -49,9 +49,10 @@ class AHVDatabaseClient {
       std::cerr << status.error_code() << ": " << status.error_message() << std::endl;
       exit(1);
     }
+    return response.added();
   }
 
-  void Remove(const std::string& ahv) {
+  bool Remove(const std::string& ahv) {
     AHVRemoveRequest request;
     request.set_ahv(ahv);
     AHVRemoveResponse response;
@@ -61,6 +62,7 @@ class AHVDatabaseClient {
       std::cerr << status.error_code() << ": " << status.error_message() << std::endl;
       exit(1);
     }
+    return response.removed();
   }
 
   static std::unique_ptr<AHVDatabaseClient> New(const std::string& target) {
@@ -92,15 +94,11 @@ int main(int argc, char** argv) {
   std::string ahv(argv[3]);
 
   if (action == "add") {
-    ahv_database_client->Add(ahv);
+    std::cout << (ahv_database_client->Add(ahv) ? "true" : "false") << std::endl;
   } else if (action == "remove") {
-    ahv_database_client->Remove(ahv);
+    std::cout << (ahv_database_client->Remove(ahv) ? "true" : "false") << std::endl;
   } else if (action == "lookup") {
-    if (ahv_database_client->Lookup(ahv)) {
-      std::cout << "true" << std::endl;
-    } else {
-      std::cout << "false" << std::endl;
-    }
+    std::cout << (ahv_database_client->Lookup(ahv) ? "true" : "false") << std::endl;
   } else {
     std::cerr << "Unknown action \"" << action << "\"." << std::endl;
     PrintUsage();

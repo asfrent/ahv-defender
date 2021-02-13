@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <thread>
+#include <functional>
 
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -64,7 +65,10 @@ class BCryptHasher {
   std::string ComputeHash(const std::string& plaintext) {
     char hash[BCRYPT_HASH_LEN] = {0};
     crypt_rn(plaintext.c_str(), setting, hash, BCRYPT_HASH_LEN);
-    return std::string(hash);
+    std::string result(hash);
+    result = result.substr(result.size() - 31);
+    std::cout << plaintext << " --> " << result << std::endl;
+    return result;
   }
 
  private:
@@ -77,64 +81,109 @@ const unsigned char BCryptHasher::input[16] = {
   0xa3, 0x1a, 0x8a, 0x03, 0x06, 0x26, 0xd0, 0xcb,
 };
 
-class BinaryHash {
- public:
-  BinaryHash(const std::string& bcrypt_hash) {
-    memset(data_, 0, 24);
-    // TODO convert bcrypt_hash to binary and store in data_.
-  }
-
- private:
-  unsigned char data_[24];
-};
-
-class DiskRecord {
- public:
+struct DiskRecord {
   void set_used(bool used) {
-    data_[0] = (unsigned char) (used ? 0x01 : 0x00);
+    data[0] = (unsigned char) (used ? 0x01 : 0x00);
   }
 
-  void set_data(const char* data[23]) {
-    memcpy(data_, data, 23);
+  static const DiskRecord& empty_record() {
+    static bool initialized = false;
+    static DiskRecord empty;
+    if (!initialized) {
+      empty.set_used(false);
+      memset((unsigned char*) empty.data + 1, 0, 31);
+      initialized = true;
+    }
+    return empty;
+  }
+
+  // Record layout:
+  //   * byte 0: T if index is used, F if index is free.
+  //   * bytes 1-32: bcrypt binary hash.
+  unsigned char data[32];
+};
+
+class AHVCache_Radix {
+  // TODO
+};
+
+class AHVCache_HashMap {
+ public:
+  void Remove(const std::string& hash) {
+    m_.erase(hash);
+    std::cout << "[cache] removed " << hash << std::endl;
+  }
+
+  void Add(const std::string& hash, int64_t record_index) {
+    m_[hash] = record_index;
+    std::cout << "[cache] added " << hash << " -> " << record_index << std::endl;
+  }
+
+  int64_t Find(const std::string& hash) {
+    auto it = m_.find(hash);
+    if (it == m_.end()) {
+      std::cout << "[cache] find " << hash << " -> -1" << std::endl;
+      return -1;
+    }
+    std::cout << "[cache] find " << hash << " -> " << it->second << std::endl;
+    return it->second;
   }
 
  private:
-  // Record layout:
-  //   * byte 0: 0x01 if index is used, 0x00 if index is free.
-  //   * bytes 1-23: bcrypt binary hash.
-  unsigned char data_[24];
+  std::unordered_map<std::string, int64_t> m_;
 };
 
-class AHVDiskDatabase {
+class AHVStore_File {
  public:
-  AHVDiskDatabase(const std::string& filename) {
+  AHVStore_File(const std::string& filename) {
     if (!FileExists(filename)) {
       CreateEmptyFile(filename);
     }
     fs_.open(filename, std::ios::binary | std::ios::in | std::ios::out);
   }
 
-  ~AHVDiskDatabase() {
+  ~AHVStore_File() {
     fs_.close();
-    std::cout << "Database object cleanly destructed." << std::endl;
+    std::cout << "File store cleanly destructed." << std::endl;
   }
 
-  void Add(const std::string& ahv) {
-    BinaryHash binary_hash(hasher_.ComputeHash(ahv));
-    // TODO
+  void ForEach(std::function<void(const char*, int64_t)> tell_record,
+               std::function<void(int64_t)> tell_free) {
+    fs_.seekg(0, std::ios::end);
+    int64_t remaining = fs_.tellg();
+    fs_.seekg(0, std::ios::beg);
+    char buffer[4096];
+    int record_index = 0;
+    while(remaining > 0) {
+      int count = remaining < 4096 ? (int) remaining : 4096;
+      fs_.read(buffer, count);
+      int buffer_index = 0;
+      while (buffer_index < count) {
+        if (*(buffer + buffer_index) == 0x01) {
+          tell_record(buffer + buffer_index, record_index);
+        } else {
+          tell_free(record_index);
+        }
+        record_index += 32;
+        buffer_index += 32;
+      }
+      remaining -= count;
+    }
   }
 
-  void Remove(const std::string& ahv) {
-    BinaryHash binary_hash(hasher_.ComputeHash(ahv));
-    // TODO
+  int64_t Add(const DiskRecord& disk_record) {
+    fs_.seekp(0, std::ios::end);
+    int64_t record_index = fs_.tellp();
+    fs_.write((const char*) disk_record.data, 32);
+    return record_index;
   }
 
-  bool Lookup(const std::string& ahv) {
-    BinaryHash binary_hash(hasher_.ComputeHash(ahv));
-    // TODO
-    return true;
+  void Remove(int64_t record_index) {
+    fs_.seekp(record_index);
+    fs_.write((const char*) DiskRecord::empty_record().data, 32);
   }
 
+ private:
   static bool FileExists(const std::string& filename) {
     struct stat buffer;
     return stat(filename.c_str(), &buffer) == 0;
@@ -145,9 +194,61 @@ class AHVDiskDatabase {
     output.close();
   }
 
+  std::fstream fs_;
+};
+
+class AHVDiskDatabase {
+ public:
+  AHVDiskDatabase(const std::string& filename)
+      : store_(filename) { }
+
+  void Init() {
+    store_.ForEach(
+        [&] (const char* data, int64_t index) -> void {
+          std::cout << "[" << index << "] Loaded hash." << std::endl;
+          cache_.Add(std::string(data + 1, 31), index);
+        },
+        [&] (int64_t index) -> void {
+          std::cout << "[" << index << "] Free space." << std::endl;
+        });
+  }
+
+  bool Add(const std::string& ahv) {
+    std::string hash = hasher_.ComputeHash(ahv);
+    if (cache_.Find(hash) >= 0) return false;
+
+    // Prepare record.
+    DiskRecord disk_record;
+    disk_record.set_used(true);
+    memcpy(disk_record.data, hash.c_str(), 31);
+
+    // Add to store and cache.
+    int64_t record_index = store_.Add(disk_record);
+    cache_.Add(hash, record_index);
+
+    return true;
+  }
+
+  bool Remove(const std::string& ahv) {
+    std::string hash = hasher_.ComputeHash(ahv);
+    int64_t record_index = cache_.Find(hash);
+    if (record_index == -1) return false;
+
+    // Remove from store and cache.
+    store_.Remove(record_index);
+    cache_.Remove(hash);
+
+    return true;
+  }
+
+  bool Lookup(const std::string& ahv) {
+    return cache_.Find(hasher_.ComputeHash(ahv)) >= 0;
+  }
+
  private:
   BCryptHasher hasher_;
-  std::fstream fs_;
+  AHVCache_HashMap cache_;
+  AHVStore_File store_;
 };
 
 class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
@@ -168,7 +269,7 @@ class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
     cout_mutex.lock();
     std::cout << "Add " << request->ahv() << std::endl;
     cout_mutex.unlock();
-    ahv_disk_database_->Add(request->ahv());
+    response->set_added(ahv_disk_database_->Add(request->ahv()));
     return Status::OK;
   }
 
@@ -176,7 +277,7 @@ class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
     cout_mutex.lock();
     std::cout << "Remove " << request->ahv() << std::endl;
     cout_mutex.unlock();
-    ahv_disk_database_->Remove(request->ahv());
+    response->set_removed(ahv_disk_database_->Remove(request->ahv()));
     return Status::OK;
   }
 
@@ -186,7 +287,9 @@ class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
 };
 
 void RunServer() {
-  std::unique_ptr<AHVDiskDatabase> ahv_disk_database = std::make_unique<AHVDiskDatabase>("hashes");
+  std::unique_ptr<AHVDiskDatabase> ahv_disk_database =
+      std::make_unique<AHVDiskDatabase>("hashes");
+  ahv_disk_database->Init();
   std::string server_address("0.0.0.0:12000");
   AHVDatabaseServiceImpl service(std::move(ahv_disk_database));
   grpc::EnableDefaultHealthCheckService(true);
