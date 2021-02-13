@@ -97,3 +97,13 @@ target_link_libraries(cli
 add_executable(ahv-gen
   tools/ahv-gen.cc
 )
+
+add_executable(db-gen
+  tools/db-gen.cc
+  lib/BCryptHasher.hpp
+)
+
+target_link_libraries(db-gen
+  "bcrypt"
+  pthread
+)

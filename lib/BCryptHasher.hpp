@@ -1,9 +1,12 @@
 #ifndef AHV_DEFENDER_BCRYPT_HASHER_H_
 #define AHV_DEFENDER_BCRYPT_HASHER_H_
 
+#include <string>
+#include <cstring>
+
 #define BCRYPT_INPUT_LEN 16
 #define BCRYPT_HASH_LEN 64
-#define BCRYPT_FACTOR 8
+#define BCRYPT_FACTOR 4
 
 extern "C" {
 char *crypt_gensalt_rn(__const char *prefix, unsigned long count, __const char *input, int size, char *output, int output_size);
@@ -15,15 +18,13 @@ class BCryptHasher {
   BCryptHasher() {
     memset(setting, 0, BCRYPT_HASH_LEN);
     crypt_gensalt_rn("$2a$", BCRYPT_FACTOR, (char*) input, BCRYPT_INPUT_LEN, setting, BCRYPT_HASH_LEN);
-    std::cout << "Initialized bcrypt setting: " << setting << std::endl;
   }
 
-  std::string ComputeHash(const std::string& plaintext) {
+  std::string ComputeHash(const std::string& plaintext) const {
     char hash[BCRYPT_HASH_LEN] = {0};
     crypt_rn(plaintext.c_str(), setting, hash, BCRYPT_HASH_LEN);
     std::string result(hash);
     result = result.substr(result.size() - 31);
-    std::cout << plaintext << " --> " << result << std::endl;
     return result;
   }
 
