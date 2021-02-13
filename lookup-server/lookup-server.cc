@@ -56,23 +56,40 @@ const unsigned char BCryptHasher::input[16] = {
   0xa3, 0x1a, 0x8a, 0x03, 0x06, 0x26, 0xd0, 0xcb,
 };
 
+class BinaryHash {
+ public:
+  BinaryHash(const std::string& bcrypt_hash) {
+    memset(data_, 0, 24);
+    // TODO convert bcrypt_hash to binary and store in data_.
+  }
+
+ private:
+  unsigned char data_[24];
+};
+
 class AHVDiskDatabase {
  public:
   AHVDiskDatabase() {
   }
 
   void Add(const std::string& ahv) {
+    BinaryHash binary_hash(hasher_.ComputeHash(ahv));
     // TODO
   }
 
   void Remove(const std::string& ahv) {
+    BinaryHash binary_hash(hasher_.ComputeHash(ahv));
     // TODO
   }
 
   bool Lookup(const std::string& ahv) {
+    BinaryHash binary_hash(hasher_.ComputeHash(ahv));
     // TODO
     return true;
   }
+
+ private:
+  BCryptHasher hasher_;
 };
 
 class AHVDatabaseServiceImpl final : public AHVDatabase::Service {
