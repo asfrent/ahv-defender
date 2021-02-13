@@ -14,29 +14,11 @@ list(APPEND CMAKE_PREFIX_PATH "/opt/grpc" "/opt/protoc")
 find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
 
-include_directories("/opt/grpc/include")
-
 execute_process(COMMAND which grpc_cpp_plugin OUTPUT_VARIABLE GRPC_CPP_PLUGIN)
 string(STRIP ${GRPC_CPP_PLUGIN} GRPC_CPP_PLUGIN)
 message(STATUS ${GRPC_CPP_PLUGIN})
 
 file(MAKE_DIRECTORY "protos/gen")
-
-include_directories("protos/gen")
-
-set(BCRYPT_SRCFILES
-	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/crypt_blowfish.c
-	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/crypt_gensalt.c
-	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/wrapper.c
-	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/x86.S
-)
-
-add_library(
-	"bcrypt"
-	${BCRYPT_SRCFILES}
-)
-
-include_directories("crypt_blowfish-1.3")
 
 add_custom_command(
     OUTPUT ../protos/gen/ahvdefender.grpc.pb.h ../protos/gen/ahvdefender.grpc.pb.cc
@@ -54,12 +36,30 @@ add_custom_command(
     WORKING_DIRECTORY "../protos"
 )
 
+include_directories("crypt_blowfish-1.3")
+include_directories("protos/gen")
+include_directories("/opt/grpc/include")
+include_directories("lib")
+
+set(BCRYPT_SRCFILES
+	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/crypt_blowfish.c
+	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/crypt_gensalt.c
+	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/wrapper.c
+	${CMAKE_CURRENT_SOURCE_DIR}/crypt_blowfish-1.3/x86.S
+)
+
+add_library(
+	"bcrypt"
+	${BCRYPT_SRCFILES}
+)
+
 add_executable(email-analyzer
     email-analyzer/email-analyzer.cc
     protos/gen/ahvdefender.grpc.pb.h
     protos/gen/ahvdefender.grpc.pb.cc
     protos/gen/ahvdefender.pb.h
     protos/gen/ahvdefender.pb.cc
+    lib/AHVUtil.hpp
 )
 
 target_link_libraries(email-analyzer
