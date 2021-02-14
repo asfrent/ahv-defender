@@ -10,7 +10,7 @@ function expect_is() {
   fi
 }
 
-RANDOM_AHV=7568336124968
+RANDOM_AHV=7567034091969
 
 expect_is $(echo ${RANDOM_AHV} | ./cli localhost:12000 lookup) "false"
 expect_is $(echo ${RANDOM_AHV} | ./cli localhost:12000 add) "true"

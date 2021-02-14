@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
   std::mt19937 mt(rd());
   std::uniform_int_distribution<int> dist(0, 9);
   while (n--) {
-    int checksum = 0, factor = 1;
+    int checksum = 28, factor = 3;
     memset(s + 3, '0', 10);
     for (int i = 3; i <= 11; ++i) {
       int r = dist(mt);
