@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <thread>
 #include <functional>
+#include <chrono>
 
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -75,6 +76,7 @@ class AHVCache_RadixBucket {
     serving_prefixes = new int32_t[MAX_SERVING_SIZE];
     serving_rindexes = new int32_t[MAX_SERVING_SIZE];
     serving_size = 0;
+    last_rebuild_time = std::chrono::high_resolution_clock::now();
   }
 
   ~AHVCache_RadixBucket() {
@@ -115,13 +117,9 @@ class AHVCache_RadixBucket {
     delete[] v2;
   }
 
-  void Add(int32_t prefix, int32_t reduced_index) {
+  void Add(int32_t prefix, int32_t reduced_index, bool quick) {
     auto p = std::make_pair(prefix, reduced_index);
-    if (delta_add.count(p) > 0) {
-      std::cout << "[bucket] tried to add, but I already have it." << std::endl;
-      exit(1);
-    }
-    if (delta_remove.count(p) > 0) {
+    if (!quick && delta_remove.count(p) > 0) {
       delta_remove.erase(p);
     }
     delta_add.insert(p);
@@ -129,10 +127,6 @@ class AHVCache_RadixBucket {
 
   void Remove(int32_t prefix, int32_t reduced_index) {
     auto p = std::make_pair(prefix, reduced_index);
-    if (delta_remove.count(p) > 0) {
-      std::cout << "[bucket] tried to remove, but I already removed it." << std::endl;
-      exit(1);
-    }
     if (delta_add.count(p) > 0) {
       delta_add.erase(p);
     }
@@ -140,23 +134,17 @@ class AHVCache_RadixBucket {
   }
 
   void ServingFind(int32_t prefix, int64_t** possible_indexes, int* count) {
-    std::cout << "[bucket] Find(" << prefix << ", ..., ...)" << std::endl;
     int32_t* start = serving_prefixes;
-    std::cout << "[bucket] start = " << start << std::endl;
     int32_t* end = serving_prefixes + serving_size;
-    std::cout << "[bucket] end = " << end << std::endl;
     int32_t* ptr = std::lower_bound(start, end, prefix);
-    std::cout << "[bucket] ptr = " << ptr << std::endl;
     int32_t* it = ptr;
     while (it != end && *it == prefix) {
       ++it;
     }
     int max_count = it - ptr;
-    std::cout << "[bucket] max_count = " << max_count << std::endl;
     *possible_indexes = new int64_t[max_count];
     it = ptr;
     int idx = ptr - start;
-    std::cout << "[bucket] idx = " << idx << std::endl;
     *count = 0;
     for (int i = 0; i < max_count; ++i) {
       if (delta_remove.count(std::make_pair(prefix, serving_rindexes[idx + i])) > 0) continue;
@@ -169,49 +157,89 @@ class AHVCache_RadixBucket {
     int64_t *v1, *v2;
     int c1, c2;
     ServingFind(prefix, &v1, &c1);
-    std::cout << "[bucket] serving found " << c1 << " possible record indexes." << std::endl;
     DeltaFind(prefix, &v2, &c2);
-    std::cout << "[bucket] delta found " << c2 << " possible record indexes." << std::endl;
     CombineResults(v1, c1, v2, c2, possible_indexes, count);
-    std::cout << "[bucket] total found " << *count << " possible record indexes." << std::endl;
   }
 
-  void MaybeRebuild() {
+  void MaybeRebuild(bool quick = false) {
     if (delta_add.size() > MAX_DELTA_SIZE || delta_remove.size() > MAX_DELTA_SIZE) {
+      std::cout << "Deltas too large, rebuilding..." << std::endl;
+      if (quick) {
+        QuickRebuild();
+      } else {
+        Rebuild();
+      }
+      return;
+    }
+
+    auto now = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - last_rebuild_time);
+    if (duration.count() > 10 * 60 && (delta_add.size() > MAX_DELTA_SIZE_WITH_TIME || delta_remove.size() > MAX_DELTA_SIZE_WITH_TIME)) {
+      std::cout << "Too much time has passed, deltas not small enough..." << std::endl;
       Rebuild();
+      return;
     }
   }
 
   void Rebuild() {
+    auto start_time = std::chrono::high_resolution_clock::now();
     // Accumulate from serving.
-    std::set<std::pair<int32_t, int32_t>> s;
     for (int i = 0; i < serving_size; ++i) {
-      s.insert(std::make_pair(serving_prefixes[i], serving_rindexes[i]));
+      delta_add.insert(std::make_pair(serving_prefixes[i], serving_rindexes[i]));
     }
 
     // Apply delta remove.
     for (auto it = delta_remove.begin(); it != delta_remove.end(); ++it) {
-      s.erase(*it);
+      delta_add.erase(*it);
     }
-    delta_remove.clear();
-
-    // Apply delta add.
-    for (auto it = delta_add.begin(); it != delta_add.end(); ++it) {
-      s.insert(*it);
-    }
-    delta_add.clear();
 
     // Offload to serving.
     serving_size = 0;
-    for (auto it = s.begin(); it != s.end(); ++it) {
+    for (auto it = delta_add.begin(); it != delta_add.end(); ++it) {
       serving_prefixes[serving_size] = it->first;
       serving_rindexes[serving_size] = it->second;
       ++serving_size;
     }
+    delta_add.clear();
+    delta_remove.clear();
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    std::cout << "Rebuilt shard. Took " << duration.count() << "ms." << std::endl;
+    last_rebuild_time = std::chrono::high_resolution_clock::now();
+  }
+
+  void QuickRebuild() {
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    int count = delta_add.size() + serving_size;
+    int its = serving_size - 1;
+    auto ita = delta_add.rbegin();
+    int itns = count - 1;
+
+    while (its >= 0 && ita != delta_add.rend()) {
+      if (ita->first >= serving_prefixes[its]) {
+        serving_prefixes[itns] = ita->first;
+        serving_rindexes[itns] = ita->second;
+        ++ita;
+      } else {
+        serving_prefixes[itns] = serving_prefixes[its];
+        serving_rindexes[itns] = serving_rindexes[its];
+        --its;
+      }
+      --itns;
+    }
+    serving_size = count;
+    delta_add.clear();
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    std::cout << "Rebuilt shard. Took " << duration.count() << "ms." << std::endl;
+    last_rebuild_time = std::chrono::high_resolution_clock::now();
   }
 
  private:
-  const int MAX_DELTA_SIZE = 4096; // total 1M
+  const int MAX_DELTA_SIZE = 20 * 4096; // total 20M
+  const int MAX_DELTA_SIZE_WITH_TIME = 4096; // total 1M
   const int MAX_SERVING_SIZE = 4194304; // total 1G
 
   int32_t* serving_prefixes;
@@ -220,23 +248,25 @@ class AHVCache_RadixBucket {
 
   std::set<std::pair<int32_t, int32_t>> delta_add;
   std::set<std::pair<int32_t, int32_t>> delta_remove;
+
+  std::chrono::time_point<std::chrono::high_resolution_clock> last_rebuild_time;
 };
 
 class AHVCache_Base {
  public:
-  virtual void Add(const std::string& hash, int64_t record_index) = 0;
+  virtual void Add(const std::string& hash, int64_t record_index, bool quick = false) = 0;
   virtual void Remove(const std::string& hash, int64_t record_index) = 0;
   virtual void Find(const std::string& hash, int64_t** possible_indexes, int* count) = 0;
 };
 
 class AHVCache_Radix : public AHVCache_Base {
  public:
-  void Add(const std::string& hash, int64_t record_index) override {
+  void Add(const std::string& hash, int64_t record_index, bool quick = false) override {
     int32_t prefix, bucket, reduced_index;
     EncodePrefix(hash, &prefix, &bucket);
     EncodeReducedIndex(record_index, &reduced_index);
-    buckets[bucket].Add(prefix, reduced_index);
-    buckets[bucket].MaybeRebuild();
+    buckets[bucket].Add(prefix, reduced_index, quick);
+    buckets[bucket].MaybeRebuild(quick);
   }
 
   void Remove(const std::string& hash, int64_t record_index) override {
@@ -269,7 +299,7 @@ class AHVCache_Radix : public AHVCache_Base {
 
 class AHVCache_HashMap : public AHVCache_Base {
  public:
-  void Add(const std::string& hash, int64_t record_index) override {
+  void Add(const std::string& hash, int64_t record_index, bool quick = false) override {
     m_[hash] = record_index;
   }
 
@@ -317,7 +347,7 @@ class AHVStore_File {
     int64_t remaining = fs_.tellg();
     fs_.seekg(0, std::ios::beg);
     char buffer[4096];
-    int record_index = 0;
+    int64_t record_index = 0;
     while(remaining > 0) {
       int count = remaining < 4096 ? (int) remaining : 4096;
       fs_.read(buffer, count);
@@ -329,6 +359,9 @@ class AHVStore_File {
           tell_free(record_index);
         }
         record_index += 32;
+        if ((record_index / 32) % 100000 == 0) {
+          std::cout << "Loaded " << (record_index / 32) << " hashes..." << std::endl;
+        }
         buffer_index += 32;
       }
       remaining -= count;
@@ -389,16 +422,21 @@ class AHVDiskDatabase {
 
   void Init() {
     int64_t total_hashes = 0, total_free = 0;
+    auto start = std::chrono::high_resolution_clock::now();
     store_.ForEach(
         [&] (const char* data, int64_t index) -> void {
-          cache_.Add(std::string(data + 1, 31), index);
+          cache_.Add(std::string(data + 1, 31), index, true);
           ++total_hashes;
         },
         [&] (int64_t index) -> void {
           ++total_free;
         });
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+
     std::cout << "Loaded " << total_hashes << " hashes." << std::endl;
     std::cout << "There's " << total_free << " free records in the DB." << std::endl;
+    std::cout << "Took " << duration.count() << " seconds." << std::endl;
   }
 
   bool Add(const std::string& ahv) {
@@ -516,6 +554,7 @@ void RunServer() {
 }
 
 int main(int argc, char** argv) {
+  std::ios::sync_with_stdio(false);
   SetUpSigIntHandler();
   RunServer();
   std::cout << "Bye." << std::endl;
