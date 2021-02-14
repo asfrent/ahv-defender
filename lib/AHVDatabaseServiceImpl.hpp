@@ -1,12 +1,14 @@
 #ifndef AHV_DEFENDER_AHV_DATABASE_SERVICE_IMPL_H_
 #define AHV_DEFENDER_AHV_DATABASE_SERVICE_IMPL_H_
 
+#include <memory>
+#include <mutex>
+#include <iostream>
+
 #include "ahvdefender.grpc.pb.h"
 
 #include "AHVDiskDatabase.hpp"
 
-using grpc::Server;
-using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::Status;
 

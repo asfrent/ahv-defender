@@ -2,6 +2,7 @@
 #include <thread>
 #include <iostream>
 #include <signal.h>
+#include <memory>
 
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
