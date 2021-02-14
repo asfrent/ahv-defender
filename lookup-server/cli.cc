@@ -1,9 +1,12 @@
 #include <iostream>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <functional>
 
 #include "AHVDatabaseClient.hpp"
+
+using namespace std::chrono;
 
 void PrintUsage() {
   std::cerr << "Usage: ./cli db_server_address add|remove|lookup [quiet]" << std::endl;
@@ -68,9 +71,19 @@ int main(int argc, char** argv) {
   // Read all lines, execute action.
   std::ios::sync_with_stdio(false);
   std::string ahv;
+
+  int line_count = 0;
+  auto start = high_resolution_clock::now();
   while (std::getline(std::cin, ahv)) {
     f(ahv);
+    ++line_count;
   }
+  auto stop = high_resolution_clock::now();
+  auto duration = duration_cast<milliseconds>(stop - start);
+  std::cout << "Took " << duration.count() << "ms." << std::endl;
+  int qps = line_count / duration_cast<seconds>(stop - start).count();
+  std::cout << "QPS: " << qps << std::endl;
+  std::cout << "Average request duration: " << duration.count() / line_count << "ms." << std::endl;
 
   return 0;
 }
