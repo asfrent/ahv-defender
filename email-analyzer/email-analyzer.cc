@@ -239,22 +239,6 @@ class AHVExtractorParanoid : public AHVExtractor {
   }
 };
 
-void TestService() {
-  auto client = AHVDatabaseClient::New("localhost:12000");
-
-  auto start_time = std::chrono::high_resolution_clock::now();
-  const int iterations = 10000;
-  for (int i = 0; i < iterations; ++i) {
-    client->Lookup("123");
-  }
-  auto end_time = std::chrono::high_resolution_clock::now();
-
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-  std::cout << "Took " << duration.count() << "ms." << std::endl;
-  int qps = (int) (iterations * 1000 / duration.count());
-  std::cout << "QPS: " << qps << std::endl;
-}
-
 std::string ReadAllFromStdin() {
   std::ios::sync_with_stdio(false);
   std::ostringstream sstream;
