@@ -1,8 +1,8 @@
 #ifndef AHV_DEFENDER_AHV_CACHE_RADIX_H_
 #define AHV_DEFENDER_AHV_CACHE_RADIX_H_
 
-#include <string>
 #include <cstring>
+#include <string>
 
 #include "AHVCache_Base.hpp"
 #include "AHVCache_RadixBucket.hpp"

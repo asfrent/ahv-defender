@@ -1,9 +1,9 @@
 #ifndef AHV_DEFENDER_AHV_DATABASE_SERVICE_IMPL_H_
 #define AHV_DEFENDER_AHV_DATABASE_SERVICE_IMPL_H_
 
+#include <iostream>
 #include <memory>
 #include <mutex>
-#include <iostream>
 
 #include "ahvdefender.grpc.pb.h"
 

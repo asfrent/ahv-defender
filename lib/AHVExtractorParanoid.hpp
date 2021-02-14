@@ -1,8 +1,10 @@
 #ifndef AHV_DEFENDER_AHV_EXTRACTOR_PARANOID_H_
 #define AHV_DEFENDER_AHV_EXTRACTOR_PARANOID_H_
 
-#include <string>
+#include <deque>
 #include <regex>
+#include <string>
+#include <vector>
 
 #include "AHVExtractor.hpp"
 

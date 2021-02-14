@@ -1,13 +1,13 @@
 #ifndef AHV_DEFENDER_AHV_DISK_DATABASE_H_
 #define AHV_DEFENDER_AHV_DISK_DATABASE_H_
 
-#include <string>
 #include <chrono>
 #include <iostream>
+#include <string>
 
-#include "BCryptHasher.hpp"
 #include "AHVCache_Radix.hpp"
 #include "AHVStore_File.hpp"
+#include "BCryptHasher.hpp"
 
 class AHVDiskDatabase {
  public:
@@ -91,6 +91,5 @@ class AHVDiskDatabase {
   AHVCache_Radix cache_;
   AHVStore_File store_;
 };
-
 
 #endif  // AHV_DEFENDER_AHV_DISK_DATABASE_H_

@@ -1,7 +1,6 @@
 #ifndef AHV_DEFENDER_AHV_CACHE_HASH_MAP_H_
 #define AHV_DEFENDER_AHV_CACHE_HASH_MAP_H_
 
-
 #include <string>
 #include <unordered_map>
 

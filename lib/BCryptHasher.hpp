@@ -1,8 +1,8 @@
 #ifndef AHV_DEFENDER_BCRYPT_HASHER_H_
 #define AHV_DEFENDER_BCRYPT_HASHER_H_
 
-#include <string>
 #include <cstring>
+#include <string>
 
 #define BCRYPT_INPUT_LEN 16
 #define BCRYPT_HASH_LEN 64

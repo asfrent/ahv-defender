@@ -1,7 +1,7 @@
-#include <cstring>
-
 #ifndef AHV_DEFENDER_DISK_RECORD_H_
 #define AHV_DEFENDER_DISK_RECORD_H_
+
+#include <cstring>
 
 struct DiskRecord {
   void set_used(bool used) {

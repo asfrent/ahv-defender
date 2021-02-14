@@ -1,8 +1,9 @@
 #ifndef AHV_DEFENDER_AHV_EXTRACTOR_THOROUGH_H_
 #define AHV_DEFENDER_AHV_EXTRACTOR_THOROUGH_H_
 
-#include <string>
 #include <regex>
+#include <string>
+#include <vector>
 
 #include "AHVExtractor.hpp"
 
@@ -58,6 +59,5 @@ class AHVExtractorThorough : public AHVExtractor {
 const std::string AHVExtractorThorough::standard_separators_ = " \\.\\-";
 const std::string AHVExtractorThorough::other_separators_ = "\\/_\\t";
 const std::string AHVExtractorThorough::typo_separators_ = ",\\*:;";
-
 
 #endif  // AHV_DEFENDER_AHV_EXTRACTOR_THOROUGH_H_

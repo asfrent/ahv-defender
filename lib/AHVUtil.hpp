@@ -1,9 +1,9 @@
 #ifndef AHV_DEFENDER_AHV_UTIL_
 #define AHV_DEFENDER_AHV_UTIL_
 
-#include <string>
 #include <cctype>
 #include <iostream>
+#include <string>
 
 class AHVUtil {
  public:

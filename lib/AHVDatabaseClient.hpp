@@ -2,6 +2,9 @@
 #define AHV_DEFENDER_AHV_DATABASE_CLIENT_H_
 
 #include <grpcpp/grpcpp.h>
+#include <iostream>
+#include <memory>
+#include <string>
 
 #include "ahvdefender.grpc.pb.h"
 
