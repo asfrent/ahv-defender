@@ -7,7 +7,6 @@
 #include "AHVCache_Base.hpp"
 #include "AHVCache_RadixBucket.hpp"
 
-
 class AHVCache_Radix : public AHVCache_Base {
  public:
   void Add(const std::string& hash, int64_t record_index, bool quick = false) override {
