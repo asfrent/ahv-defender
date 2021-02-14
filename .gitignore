@@ -47,3 +47,6 @@ build
 
 # ViM, the best editor there is
 *.swp
+
+# VSCode
+.vscode/
