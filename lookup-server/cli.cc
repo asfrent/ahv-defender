@@ -9,7 +9,7 @@
 using namespace std::chrono;
 
 void PrintUsage() {
-  std::cerr << "Usage: ./cli db_server_address add|remove|lookup [quiet]" << std::endl;
+  std::cerr << "Usage: ./cli db_server_address add|remove|lookup [quiet|time]" << std::endl;
 }
 
 int main(int argc, char** argv) {
@@ -24,10 +24,12 @@ int main(int argc, char** argv) {
   std::string action(argv[2]);
 
   // Sort out quiet arg.
-  bool quiet = false;
+  bool quiet = false, time = false;
   if (argc == 4) {
     if (strcmp(argv[3], "quiet") == 0) {
       quiet = true;
+    } else if (strcmp(argv[3], "time") == 0) {
+      time = true;
     } else {
       PrintUsage();
       exit(1);
@@ -78,12 +80,18 @@ int main(int argc, char** argv) {
     f(ahv);
     ++line_count;
   }
+  if (line_count == 0) return 1;
   auto stop = high_resolution_clock::now();
-  auto duration = duration_cast<milliseconds>(stop - start);
-  std::cout << "Took " << duration.count() << "ms." << std::endl;
-  int qps = line_count / duration_cast<seconds>(stop - start).count();
-  std::cout << "QPS: " << qps << std::endl;
-  std::cout << "Average request duration: " << duration.count() / line_count << "ms." << std::endl;
+  auto duration_ms = duration_cast<milliseconds>(stop - start);
+  auto duration_s = duration_cast<seconds>(stop - start);
+  if (time) {
+    std::cout << "Took " << duration_ms.count() << "ms." << std::endl;
+    if (duration_s.count() > 0) {
+      int qps = line_count / duration_s.count();
+      std::cout << "QPS: " << qps << std::endl;
+    }
+    std::cout << "Average request duration: " << duration_ms.count() / line_count << "ms." << std::endl;
+  }
 
   return 0;
 }
