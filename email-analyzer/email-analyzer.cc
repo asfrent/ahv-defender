@@ -1,13 +1,12 @@
 #include <string>
 #include <iostream>
+#include <memory>
 
-#include "AHVUtil.hpp"
 #include "AHVDatabaseClient.hpp"
 #include "AHVExtractor.hpp"
 #include "AHVExtractorStandard.hpp"
 #include "AHVExtractorThorough.hpp"
 #include "AHVExtractorParanoid.hpp"
-
 
 std::string ReadAllFromStdin() {
   std::ios::sync_with_stdio(false);
