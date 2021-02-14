@@ -17,3 +17,6 @@ spec:
         image: andreisfrent/ahv-defender:lookup-server
         ports:
         - containerPort: 12000
+      imagePullSecrets:
+      - name: regcred
+
