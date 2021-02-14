@@ -151,14 +151,17 @@ class AHVCache_RadixBucket {
     while (it != end && *it == prefix) {
       ++it;
     }
-    *count = it - ptr;
-    std::cout << "[bucket] *count = " << *count << std::endl;
-    *possible_indexes = new int64_t[*count];
+    int max_count = it - ptr;
+    std::cout << "[bucket] max_count = " << max_count << std::endl;
+    *possible_indexes = new int64_t[max_count];
     it = ptr;
     int idx = ptr - start;
     std::cout << "[bucket] idx = " << idx << std::endl;
-    for (int i = 0; i < *count; ++i) {
-      (*possible_indexes)[i] = (int64_t) 32 * (int64_t) serving_rindexes[idx + i];
+    *count = 0;
+    for (int i = 0; i < max_count; ++i) {
+      if (delta_remove.count(std::make_pair(prefix, serving_rindexes[idx + i])) > 0) continue;
+      (*possible_indexes)[*count] = (int64_t) 32 * (int64_t) serving_rindexes[idx + i];
+      ++(*count);
     }
   }
 
@@ -173,11 +176,38 @@ class AHVCache_RadixBucket {
     std::cout << "[bucket] total found " << *count << " possible record indexes." << std::endl;
   }
 
+  void MaybeRebuild() {
+    if (delta_add.size() > MAX_DELTA_SIZE || delta_remove.size() > MAX_DELTA_SIZE) {
+      Rebuild();
+    }
+  }
+
   void Rebuild() {
-    // std::set<std::pair<int32_t, int32_t>> s;
-    // for (int i = 0; i < serving_size; ++i) {
-    //   s.insert(std::make_pair(serving_prefixes[i], serving_rindexes[i]));
-    // }
+    // Accumulate from serving.
+    std::set<std::pair<int32_t, int32_t>> s;
+    for (int i = 0; i < serving_size; ++i) {
+      s.insert(std::make_pair(serving_prefixes[i], serving_rindexes[i]));
+    }
+
+    // Apply delta remove.
+    for (auto it = delta_remove.begin(); it != delta_remove.end(); ++it) {
+      s.erase(*it);
+    }
+    delta_remove.clear();
+
+    // Apply delta add.
+    for (auto it = delta_add.begin(); it != delta_add.end(); ++it) {
+      s.insert(*it);
+    }
+    delta_add.clear();
+
+    // Offload to serving.
+    serving_size = 0;
+    for (auto it = s.begin(); it != s.end(); ++it) {
+      serving_prefixes[serving_size] = it->first;
+      serving_rindexes[serving_size] = it->second;
+      ++serving_size;
+    }
   }
 
  private:
@@ -206,6 +236,7 @@ class AHVCache_Radix : public AHVCache_Base {
     EncodePrefix(hash, &prefix, &bucket);
     EncodeReducedIndex(record_index, &reduced_index);
     buckets[bucket].Add(prefix, reduced_index);
+    buckets[bucket].MaybeRebuild();
   }
 
   void Remove(const std::string& hash, int64_t record_index) override {
@@ -213,18 +244,19 @@ class AHVCache_Radix : public AHVCache_Base {
     EncodePrefix(hash, &prefix, &bucket);
     EncodeReducedIndex(record_index, &reduced_index);
     buckets[bucket].Remove(prefix, reduced_index);
+    buckets[bucket].MaybeRebuild();
   }
 
   void Find(const std::string& hash, int64_t** possible_indexes, int* count) override {
     int32_t prefix, bucket;
     EncodePrefix(hash, &prefix, &bucket);
-    buckets[bucket].Rebuild();
     buckets[bucket].Find(prefix, possible_indexes, count);
+    buckets[bucket].MaybeRebuild();
   }
 
  private:
   void EncodePrefix(const std::string& hash, int32_t* prefix, int* bucket) {
-    *bucket = (int) (*hash.c_str());
+    *bucket = (int) ((unsigned char) *hash.c_str());
     memcpy((char*) prefix, hash.c_str(), 4);
   }
 
