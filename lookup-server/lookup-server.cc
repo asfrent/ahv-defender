@@ -82,33 +82,21 @@ class AHVCache_RadixBucket {
     delete[] serving_rindexes;
   }
 
-  bool DeltaHas(const std::multimap<int32_t, int32_t>& delta, int32_t prefix, int32_t reduced_index) {
-    auto p = delta.equal_range(prefix);
-    for (auto it = p.first; it != p.second; ++it) {
-      if (it->second == reduced_index) {
-        return true;
-      }
+  int DeltaCount(const std::set<std::pair<int32_t, int32_t>> delta, int32_t prefix) {
+    auto lb = std::lower_bound(delta.begin(), delta.end(), std::make_pair(prefix, 0));
+    int c = 0;
+    for (auto it = lb; it != delta.end() && it->first == prefix; ++it) {
+      ++c;
     }
-    return false;
-  }
-
-  void DeltaErase(std::multimap<int32_t, int32_t>* delta, int32_t prefix, int32_t reduced_index) {
-    auto p = delta->equal_range(prefix);
-    for (auto it = p.first; it != p.second; ++it) {
-      if (it->second == reduced_index) {
-        delta->erase(it);
-        return;
-      }
-    }
+    return c;
   }
 
   void DeltaFind(int32_t prefix, int64_t** possible_indexes, int* count) {
-    *count = delta_add.count(prefix);
+    *count = DeltaCount(delta_add, prefix);
     *possible_indexes = new int64_t[*count];
     *count = 0;
-    auto p = delta_add.equal_range(prefix);
-    for (auto it = p.first; it != p.second; ++it) {
-      if (DeltaHas(delta_remove, it->first, it->second)) continue;
+    auto lb = std::lower_bound(delta_add.begin(), delta_add.end(), std::make_pair(prefix, 0));
+    for (auto it = lb; it != delta_add.end() && it->first == prefix; ++it) {
       (*possible_indexes)[*count] = (int64_t) 32 * (int64_t) it->second;
       ++(*count);
     }
@@ -128,25 +116,27 @@ class AHVCache_RadixBucket {
   }
 
   void Add(int32_t prefix, int32_t reduced_index) {
-    if(DeltaHas(delta_add, prefix, reduced_index)) {
+    auto p = std::make_pair(prefix, reduced_index);
+    if (delta_add.count(p) > 0) {
       std::cout << "[bucket] tried to add, but I already have it." << std::endl;
       exit(1);
     }
-    if (DeltaHas(delta_remove, prefix, reduced_index)) {
-      DeltaErase(&delta_remove, prefix, reduced_index);
+    if (delta_remove.count(p) > 0) {
+      delta_remove.erase(p);
     }
-    delta_add.insert(std::make_pair(prefix, reduced_index));
+    delta_add.insert(p);
   }
 
   void Remove(int32_t prefix, int32_t reduced_index) {
-    if (DeltaHas(delta_remove, prefix, reduced_index)) {
+    auto p = std::make_pair(prefix, reduced_index);
+    if (delta_remove.count(p) > 0) {
       std::cout << "[bucket] tried to remove, but I already removed it." << std::endl;
       exit(1);
     }
-    if (DeltaHas(delta_add, prefix, reduced_index)) {
-      DeltaErase(&delta_add, prefix, reduced_index);
+    if (delta_add.count(p) > 0) {
+      delta_add.erase(p);
     }
-    delta_remove.insert(std::make_pair(prefix, reduced_index));
+    delta_remove.insert(p);
   }
 
   void ServingFind(int32_t prefix, int64_t** possible_indexes, int* count) {
@@ -198,8 +188,8 @@ class AHVCache_RadixBucket {
   int32_t* serving_rindexes;
   int32_t serving_size;
 
-  std::multimap<int32_t, int32_t> delta_add;
-  std::multimap<int32_t, int32_t> delta_remove;
+  std::set<std::pair<int32_t, int32_t>> delta_add;
+  std::set<std::pair<int32_t, int32_t>> delta_remove;
 };
 
 class AHVCache_Base {
