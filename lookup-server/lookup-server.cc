@@ -72,28 +72,84 @@ struct DiskRecord {
 class AHVCache_RadixBucket {
  public:
   AHVCache_RadixBucket() {
-    delta_add_prefixes = new int32_t[MAX_DELTA_SIZE];
-    delta_add_rindexes = new int32_t[MAX_DELTA_SIZE];
-    delta_remove_prefixes = new int32_t[MAX_DELTA_SIZE];
     serving_prefixes = new int32_t[MAX_SERVING_SIZE];
     serving_rindexes = new int32_t[MAX_SERVING_SIZE];
-    delta_remove_size = 0;
-    delta_add_size = 0;
     serving_size = 0;
   }
 
+  ~AHVCache_RadixBucket() {
+    delete[] serving_prefixes;
+    delete[] serving_rindexes;
+  }
+
+  bool DeltaHas(const std::multimap<int32_t, int32_t>& delta, int32_t prefix, int32_t reduced_index) {
+    auto p = delta.equal_range(prefix);
+    for (auto it = p.first; it != p.second; ++it) {
+      if (it->second == reduced_index) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void DeltaErase(std::multimap<int32_t, int32_t>* delta, int32_t prefix, int32_t reduced_index) {
+    auto p = delta->equal_range(prefix);
+    for (auto it = p.first; it != p.second; ++it) {
+      if (it->second == reduced_index) {
+        delta->erase(it);
+        return;
+      }
+    }
+  }
+
+  void DeltaFind(int32_t prefix, int64_t** possible_indexes, int* count) {
+    *count = delta_add.count(prefix);
+    *possible_indexes = new int64_t[*count];
+    *count = 0;
+    auto p = delta_add.equal_range(prefix);
+    for (auto it = p.first; it != p.second; ++it) {
+      if (DeltaHas(delta_remove, it->first, it->second)) continue;
+      (*possible_indexes)[*count] = (int64_t) 32 * (int64_t) it->second;
+      ++(*count);
+    }
+  }
+
+  void CombineResults(int64_t* v1, int c1, int64_t* v2, int c2, int64_t** r, int* c) {
+    *r = new int64_t[c1 + c2];
+    *c = 0;
+    for (int i = 0; i < c1; ++i) {
+      (*r)[(*c)++] = v1[i];
+    }
+    for (int i = 0; i < c2; ++i) {
+      (*r)[(*c)++] = v2[i];
+    }
+    delete[] v1;
+    delete[] v2;
+  }
+
   void Add(int32_t prefix, int32_t reduced_index) {
-    delta_add_prefixes[delta_add_size] = prefix;
-    delta_add_rindexes[delta_add_size] = reduced_index;
-    ++delta_add_size;
+    if(DeltaHas(delta_add, prefix, reduced_index)) {
+      std::cout << "[bucket] tried to add, but I already have it." << std::endl;
+      exit(1);
+    }
+    if (DeltaHas(delta_remove, prefix, reduced_index)) {
+      DeltaErase(&delta_remove, prefix, reduced_index);
+    }
+    delta_add.insert(std::make_pair(prefix, reduced_index));
   }
 
-  void Remove(int32_t prefix) {
-    delta_remove_prefixes[delta_remove_size] = prefix;
-    ++delta_remove_size;
+  void Remove(int32_t prefix, int32_t reduced_index) {
+    if (DeltaHas(delta_remove, prefix, reduced_index)) {
+      std::cout << "[bucket] tried to remove, but I already removed it." << std::endl;
+      exit(1);
+    }
+    if (DeltaHas(delta_add, prefix, reduced_index)) {
+      DeltaErase(&delta_add, prefix, reduced_index);
+    }
+    delta_remove.insert(std::make_pair(prefix, reduced_index));
   }
 
-  void Find(int32_t prefix, int64_t** possible_indexes, int* count) {
+  void ServingFind(int32_t prefix, int64_t** possible_indexes, int* count) {
     std::cout << "[bucket] Find(" << prefix << ", ..., ...)" << std::endl;
     int32_t* start = serving_prefixes;
     std::cout << "[bucket] start = " << start << std::endl;
@@ -116,111 +172,40 @@ class AHVCache_RadixBucket {
     }
   }
 
+  void Find(int32_t prefix, int64_t** possible_indexes, int* count) {
+    int64_t *v1, *v2;
+    int c1, c2;
+    ServingFind(prefix, &v1, &c1);
+    std::cout << "[bucket] serving found " << c1 << " possible record indexes." << std::endl;
+    DeltaFind(prefix, &v2, &c2);
+    std::cout << "[bucket] delta found " << c2 << " possible record indexes." << std::endl;
+    CombineResults(v1, c1, v2, c2, possible_indexes, count);
+    std::cout << "[bucket] total found " << *count << " possible record indexes." << std::endl;
+  }
+
   void Rebuild() {
-    // First pass, apply remove.
-    for (int i = 0; i < delta_remove_size; ++i) {
-      // Binay search for prefix.
-      int32_t* ptr = std::lower_bound(serving_prefixes, serving_prefixes + serving_size, delta_remove_prefixes[i]);
-      // Skip if not found.
-      if (*ptr != delta_remove_prefixes[i]) continue;
-      // Where did we find it?
-      int index = ptr - serving_prefixes;
-      // Replace with last element.
-      serving_prefixes[index] = serving_prefixes[serving_size - 1];
-      serving_rindexes[index] = serving_rindexes[serving_size - 1];
-      // Decrement size.
-      --serving_size;
-    }
-    // Applied all removes, reset remove delta size.
-    delta_remove_size = 0;
-
-    // Second pass, apply add.
-    for (int i = 0; i < delta_add_size; ++i) {
-      // Append at end.
-      serving_prefixes[serving_size] = delta_add_prefixes[i];
-      serving_rindexes[serving_size] = delta_add_rindexes[i];
-      // Increment size.
-      ++serving_size;
-    }
-    // Applied all adds, reset add delta size.
-    delta_add_size = 0;
-
-    MergeSort(0, serving_size);
+    // std::set<std::pair<int32_t, int32_t>> s;
+    // for (int i = 0; i < serving_size; ++i) {
+    //   s.insert(std::make_pair(serving_prefixes[i], serving_rindexes[i]));
+    // }
   }
 
  private:
-  void MergeSort(int li, int ls) {
-    if (li >= ls) return;
-    int mid = li + (ls - li) / 2;
-    MergeSort(li, mid);
-    MergeSort(mid + 1, ls);
-    Merge(li, mid, ls);
-  }
-
-  void Merge(int li, int mid, int ls) {
-    int size1 = mid - li + 1;
-    int32_t* v1_prefixes = new int32_t[size1];
-    int32_t* v1_rindexes = new int32_t[size1];
-    memcpy(v1_prefixes, serving_prefixes + li, size1 * sizeof(int32_t));
-    memcpy(v1_rindexes, serving_rindexes + li, size1 * sizeof(int32_t));
-
-    int size2 = ls - mid;
-    int32_t* v2_prefixes = new int32_t[size2];
-    int32_t* v2_rindexes = new int32_t[size2];
-    memcpy(v2_prefixes, serving_prefixes + mid + 1, size2 * sizeof(int32_t));
-    memcpy(v2_rindexes, serving_rindexes + mid + 1, size2 * sizeof(int32_t));
-
-    int it1 = 0, it2 = 0, it = li;
-
-    while (it1 < size1 && it2 < size2) {
-      if (v1_prefixes[it1] <= v2_prefixes[it2]) {
-        serving_prefixes[it] = v1_prefixes[it1];
-        serving_rindexes[it] = v1_rindexes[it1];
-        ++it1;
-      } else {
-        serving_prefixes[it] = v2_prefixes[it2];
-        serving_prefixes[it] = v2_prefixes[it2];
-        ++it2;
-      }
-      ++it;
-    }
-
-    while (it1 < size1) {
-      serving_prefixes[it] = v1_prefixes[it1];
-      serving_rindexes[it] = v1_rindexes[it1];
-      ++it1;
-      ++it;
-    }
-
-    while (it2 < size2) {
-      serving_prefixes[it] = v1_prefixes[it2];
-      serving_rindexes[it] = v1_rindexes[it2];
-      ++it2;
-      ++it;
-    }
-
-    delete[] v1_prefixes;
-    delete[] v1_rindexes;
-    delete[] v2_prefixes;
-    delete[] v2_rindexes;
-  }
-
   const int MAX_DELTA_SIZE = 4096; // total 1M
   const int MAX_SERVING_SIZE = 4194304; // total 1G
 
-  int32_t* delta_add_prefixes;
-  int32_t* delta_add_rindexes;
-  int32_t* delta_remove_prefixes;
   int32_t* serving_prefixes;
   int32_t* serving_rindexes;
+  int32_t serving_size;
 
-  int32_t delta_add_size, delta_remove_size, serving_size;
+  std::multimap<int32_t, int32_t> delta_add;
+  std::multimap<int32_t, int32_t> delta_remove;
 };
 
 class AHVCache_Base {
  public:
   virtual void Add(const std::string& hash, int64_t record_index) = 0;
-  virtual void Remove(const std::string& hash) = 0;
+  virtual void Remove(const std::string& hash, int64_t record_index) = 0;
   virtual void Find(const std::string& hash, int64_t** possible_indexes, int* count) = 0;
 };
 
@@ -233,10 +218,11 @@ class AHVCache_Radix : public AHVCache_Base {
     buckets[bucket].Add(prefix, reduced_index);
   }
 
-  void Remove(const std::string& hash) override {
-    int32_t prefix, bucket;
+  void Remove(const std::string& hash, int64_t record_index) override {
+    int32_t prefix, bucket, reduced_index;
     EncodePrefix(hash, &prefix, &bucket);
-    buckets[bucket].Remove(prefix);
+    EncodeReducedIndex(record_index, &reduced_index);
+    buckets[bucket].Remove(prefix, reduced_index);
   }
 
   void Find(const std::string& hash, int64_t** possible_indexes, int* count) override {
@@ -261,12 +247,15 @@ class AHVCache_Radix : public AHVCache_Base {
 
 class AHVCache_HashMap : public AHVCache_Base {
  public:
-  void Remove(const std::string& hash) override {
-    m_.erase(hash);
-  }
-
   void Add(const std::string& hash, int64_t record_index) override {
     m_[hash] = record_index;
+  }
+
+  void Remove(const std::string& hash, int64_t record_index) override {
+    if (m_[hash] != record_index) {
+      exit(1);
+    }
+    m_.erase(hash);
   }
 
   void Find(const std::string& hash, int64_t** possible_indexes, int* count) override {
@@ -419,7 +408,7 @@ class AHVDiskDatabase {
       if (store_.HashAtEquals(possible_record_indexes[i], hash)) {
         found = true;
         store_.Remove(possible_record_indexes[i]);
-        cache_.Remove(hash);
+        cache_.Remove(hash, possible_record_indexes[i]);
         break;
       }
     }
