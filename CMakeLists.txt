@@ -108,6 +108,16 @@ target_link_libraries(db-gen
   pthread
 )
 
+add_executable(db-build
+  tools/db-build.cc
+  lib/BCryptHasher.hpp
+)
+
+target_link_libraries(db-build
+  "bcrypt"
+  pthread
+)
+
 add_executable(db-gen-fake
   tools/db-gen-fake.cc
 )
