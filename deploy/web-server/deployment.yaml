@@ -15,6 +15,7 @@ spec:
       containers:
       - name: web-server
         image: andreisfrent/ahv-defender:web-server
+        imagePullPolicy: Always
         ports:
         - containerPort: 7835
       imagePullSecrets:

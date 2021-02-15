@@ -1,0 +1,25 @@
+<html>
+  <head>
+    <link rel="stylesheet" href="my.css">
+  </head>
+  <body>
+    <div class="outer">
+      <form action="send_email" method="post">
+        <div class="inner">
+          <h1>AHV-Defender's Webmail</h1>
+          <p>Hello John, please type your email in the box below!</p>
+          <hr>
+          <label for="to"><b>To</b></label>
+          <input type="text" name="to" id="to" required>
+          <label for="sub"><b>Subject</b></label>
+          <input type="text" name="sub" id="sub" required>
+          <label for="eml"><b>Body</b></label>
+          <textarea rows="10" style="resize: none;" type="text" name="eml" id="eml" required></textarea>
+          <center><button type="submit" class="send">Send</button></center>
+          <hr>
+          <p>Click <a href="ahvs.html" target="_blank">here</a> to see a list of AHVs in the DB.</p>
+        </div>
+      </form>
+    </div>
+  </body>
+</html>

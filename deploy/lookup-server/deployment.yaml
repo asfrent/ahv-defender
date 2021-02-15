@@ -15,6 +15,7 @@ spec:
       containers:
       - name: lookup-server
         image: andreisfrent/ahv-defender:lookup-server
+        imagePullPolicy: Always
         ports:
         - containerPort: 12000
       imagePullSecrets:

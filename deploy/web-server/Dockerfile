@@ -1,9 +1,12 @@
-# Start from node image.
-FROM node:latest
+# Start from ubuntu image.
+FROM ubuntu:latest
 
 # Add the web dir.
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm
+
 ADD web /web
 WORKDIR web
+RUN ls -l
 
 # Install deps.
 RUN npm install

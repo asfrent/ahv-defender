@@ -1,0 +1,25 @@
+{
+  "name": "ahv-defender-node",
+  "version": "1.0.0",
+  "description": "NodeJS based serving of AHV-Defender site.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asfrent/ahv-defender.git"
+  },
+  "author": "Andrei Traian Sfrent",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/asfrent/ahv-defender/issues"
+  },
+  "homepage": "https://github.com/asfrent/ahv-defender#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "debug": "^4.3.1",
+    "express": "^4.17.1",
+    "nodemailer": "^6.4.18"
+  }
+}
