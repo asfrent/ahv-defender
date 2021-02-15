@@ -35,7 +35,7 @@ function send_email(to, subject, body) {
 
 function check_email(text, cb) {
     var child = child_process.execFile(
-        "./email-analyzer", ['thorough', 'localhost:12000'],
+        "./email-analyzer", ['thorough', 'lookup-server:12000'],
         function (err, stdout, stderr) {
           if (err || stdout) {
             cb(true);
